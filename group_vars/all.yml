@@ -12,7 +12,7 @@ service_port: 80
 
 service_type: ClusterIP
 
-environment: prod
+environment: "prod"
 
 scale_enabled: true
 
