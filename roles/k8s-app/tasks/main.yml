@@ -1,2 +1,16 @@
 ---
-# tasks file for k8s-app
+- import_tasks: namespace.yml
+  tags:
+    - namespace
+
+- import_tasks: deploy.yml
+  tags:
+    - deploy
+
+- import_tasks: scale.yml
+  tags:
+    - scale
+
+- import_tasks: validate.yml
+  tags:
+    - validate

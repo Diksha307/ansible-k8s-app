@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ app_name }}
+  namespace: {{ namespace_name }}
+
+spec:
+  replicas: {{ replica_count }}
+
+  selector:
+    matchLabels:
+      app: {{ app_name }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ app_name }}
+
+    spec:
+
+      containers:
+
+      - name: fastapi
+
+        image: {{ image_name }}
+
+        ports:
+        - containerPort: {{ container_port }}
+
+        env:
+        - name: ENVIRONMENT
+          value: {{ environment }}
+
+        - name: REDIS_HOST
+          value: localhost
+
+      - name: redis
+
+        image: redis:7
+
+        ports:
+        - containerPort: 6379

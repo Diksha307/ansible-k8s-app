@@ -1,0 +1,19 @@
+namespace_name: demo-app
+
+app_name: fastapi-demo
+
+image_name: tiangolo/uvicorn-gunicorn-fastapi:python3.11
+
+replica_count: 2
+
+container_port: 80
+
+service_port: 80
+
+service_type: ClusterIP
+
+environment: prod
+
+scale_enabled: true
+
+scale_replicas: "{{ 5 if environment == 'prod' else 2 }}"

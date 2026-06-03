@@ -1,0 +1,28 @@
+---
+- block:
+
+    - name: Create Deployment
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', 'deployment.yml.j2') }}"
+
+    - name: Create Service
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', 'service.yml.j2') }}"
+
+  rescue:
+
+    - name: Deployment Failed
+      debug:
+        msg: "Application deployment failed"
+
+    - name: Stop Execution
+      fail:
+        msg: "Deployment terminated"
+
+  always:
+
+    - name: Deployment Attempt Finished
+      debug:
+        msg: "Deployment task completed"

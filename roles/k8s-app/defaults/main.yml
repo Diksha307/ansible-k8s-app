@@ -1,2 +1,5 @@
 ---
 # defaults file for k8s-app
+
+replica_count: 1
+service_type: ClusterIP

@@ -1,0 +1,9 @@
+---
+- name: Scale Deployment
+  kubernetes.core.k8s_scale:
+    api_version: apps/v1
+    kind: Deployment
+    namepsace: "{{ namepsace_name }}"   
+    name: "{{ app_name }}"
+    replicas: "{{ scale_replicas }}"
+  when: scale_enabled
