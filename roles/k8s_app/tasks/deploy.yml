@@ -15,6 +15,29 @@
         state: present
         definition: "{{ lookup('template', 'service.yml.j2') }}"
 
+    - name: Wait For Rollout To Complete
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ app_name }}"
+        namespace: "{{ namespace_name }}"
+      register: rollout_info
+      retries: 12
+      delay: 15
+      until: >
+        rollout_info.resources | length > 0 and
+        rollout_info.resources[0].status.updatedReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1) and
+        rollout_info.resources[0].status.availableReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1)
+      when: deploy_result.changed
+
+    - name: Print Rollout Status
+      debug:
+        msg: >
+          Rollout status — desired: {{ rollout_info.resources[0].status.replicas | default('N/A') }},
+          updated: {{ rollout_info.resources[0].status.updatedReplicas | default('N/A') }},
+          available: {{ rollout_info.resources[0].status.availableReplicas | default('N/A') }}
+      when: deploy_result.changed
+
   rescue:
 
     - name: Deployment Failed - Attempting Rollback
@@ -30,26 +53,3 @@
     - name: Deployment Attempt Finished
       debug:
         msg: "Deployment task completed for {{ app_name }}"
-
-- name: Wait For Rollout To Complete
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: "{{ app_name }}"
-    namespace: "{{ namespace_name }}"
-  register: rollout_info
-  retries: 12
-  delay: 15
-  until: >
-    rollout_info.resources | length > 0 and
-    rollout_info.resources[0].status.updatedReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1) and
-    rollout_info.resources[0].status.availableReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1)
-  when: deploy_result.changed
-
-- name: Print Rollout Status
-  debug:
-    msg: >
-      Rollout status — desired: {{ rollout_info.resources[0].status.replicas | default('N/A') }},
-      updated: {{ rollout_info.resources[0].status.updatedReplicas | default('N/A') }},
-      available: {{ rollout_info.resources[0].status.availableReplicas | default('N/A') }}
-  when: deploy_result.changed
