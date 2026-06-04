@@ -1,45 +1,13 @@
 ---
+- name: Compute ConfigMap Checksum
+  set_fact:
+    configmap_hash: "{{ lookup('template', 'configmap.yml.j2') | hash('sha256') }}"
+  tags:
+    - configmap
+
 - name: Deploy ConfigMap
   kubernetes.core.k8s:
     state: present
     definition: "{{ lookup('template', 'configmap.yml.j2') }}"
-  register: configmap_result
-  tags:
-    - configmap
-
-- name: Trigger Rolling Restart When ConfigMap Changed
-  kubernetes.core.k8s_rollout_restart:
-    api_version: apps/v1
-    kind: Deployment
-    name: "{{ app_name }}"
-    namespace: "{{ namespace_name }}"
-  when: configmap_result.changed
-  tags:
-    - configmap
-
-- name: Wait For Rollout To Complete
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: "{{ app_name }}"
-    namespace: "{{ namespace_name }}"
-  register: rollout_info
-  retries: 12
-  delay: 15
-  until: >
-    rollout_info.resources | length > 0 and
-    rollout_info.resources[0].status.updatedReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1) and
-    rollout_info.resources[0].status.availableReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1)
-  when: configmap_result.changed
-  tags:
-    - configmap
-
-- name: Print Rollout Status
-  debug:
-    msg: >
-      Rollout status — desired: {{ rollout_info.resources[0].status.replicas | default('N/A') }},
-      updated: {{ rollout_info.resources[0].status.updatedReplicas | default('N/A') }},
-      available: {{ rollout_info.resources[0].status.availableReplicas | default('N/A') }}
-  when: configmap_result.changed
   tags:
     - configmap

@@ -22,6 +22,8 @@ spec:
     metadata:
       labels:
         app: {{ app_name }}
+      annotations:
+        checksum/config: "{{ configmap_hash }}"
 
     spec:
 

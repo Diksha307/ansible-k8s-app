@@ -19,7 +19,7 @@ ansible-k8s-app/
         ├── tasks/
         │   ├── main.yml              # Task orchestrator with tags
         │   ├── namespace.yml         # Create K8s namespace
-        │   ├── configmap.yml         # ConfigMap deploy + rollout trigger
+        │   ├── configmap.yml         # ConfigMap deploy + hash checksum fact
         │   ├── deploy.yml            # Deployment + Service with error handling
         │   ├── scale.yml             # Dynamic scaling
         │   └── validate.yml          # Pod readiness + assertion checks
@@ -129,16 +129,18 @@ ansible-playbook -i inventory site.yml --extra-vars "environment=staging scale_e
 The deployment runs **FastAPI** (application) and **Redis** (cache) as a sidecar in the same pod. This satisfies the "more functional than plain NGINX" requirement and demonstrates multi-container pod configuration.
 
 ### ConfigMap-driven configuration
-All runtime config (environment, Redis host, log level, app version) is stored in a Kubernetes ConfigMap and injected into the app container via `envFrom`. Updating the ConfigMap and re-running the playbook automatically triggers a rolling restart — only when something changed (idempotency).
+All runtime config (environment, Redis host, log level, app version) is stored in a Kubernetes ConfigMap and injected into the app container via `envFrom`.
+
+Rollouts are triggered using a **SHA256 hash of the ConfigMap content** (Helm-style). The hash is computed by Ansible and embedded as a `checksum/config` annotation on the Deployment pod template. When the ConfigMap data changes, the hash changes, the pod template spec changes, and Kubernetes performs a rolling update automatically — no manual restart command needed.
 
 ### Idempotency
-The `kubernetes.core.k8s` module is declarative — re-running the playbook when nothing changed produces zero `changed` tasks. The rolling restart in `configmap.yml` is guarded by `when: configmap_result.changed` so it only fires on actual config updates.
+The `kubernetes.core.k8s` module is declarative — re-running the playbook when nothing changed produces zero `changed` tasks. The `checksum/config` annotation stays the same if the ConfigMap data is unchanged, so no rollout is triggered.
 
 ### Dynamic scaling
 `scale_replicas` evaluates to `5` when `environment == 'prod'` and `2` otherwise. Combined with the `scale_enabled` flag, scaling can be toggled without editing variables.
 
 ### Error handling
-The deploy block uses Ansible's `block/rescue/always` pattern — a failed deployment prints diagnostics and halts cleanly rather than leaving the system in an unknown state.
+The deploy block uses Ansible's `block/rescue/always` pattern. If a deployment fails, `kubectl rollout undo` restores the **previous working ReplicaSet** (real rollback to the last known-good version). A `fail` task then halts execution cleanly.
 
 ### Tags for selective execution
 Every task group has a tag (`namespace`, `configmap`, `deploy`, `scale`, `validate`) enabling targeted runs during CI or debugging.
@@ -147,11 +149,12 @@ Every task group has a tag (`namespace`, `configmap`, `deploy`, `scale`, `valida
 
 ## Rolling Update Flow
 
-1. Run playbook with updated `log_level` or `app_version` in `group_vars/all.yml`
-2. `configmap.yml` applies the new ConfigMap — `configmap_result.changed` becomes `true`
-3. `k8s_rollout_restart` triggers a rolling restart of the Deployment
-4. Ansible polls `k8s_rollout_info` until `updatedReplicas == replicas`
-5. Final `debug` task prints the rollout summary
+1. Update `log_level`, `app_version`, or any ConfigMap variable in `group_vars/all.yml`
+2. `configmap.yml` computes a new SHA256 hash of the rendered ConfigMap template
+3. The hash is embedded as `checksum/config` annotation in the Deployment pod template
+4. `deploy.yml` applies the Deployment — Kubernetes detects the changed annotation and performs a rolling update automatically
+5. Ansible polls until `updatedReplicas == replicas` and `availableReplicas == replicas`
+6. Final `debug` task prints the rollout summary
 
 ---
 
