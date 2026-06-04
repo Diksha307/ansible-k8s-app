@@ -1,5 +1,9 @@
 ---
-# defaults file for k8s-app
-
 replica_count: 1
 service_type: ClusterIP
+scale_enabled: false
+scale_replicas: 1
+environment: "dev"
+redis_host: "localhost"
+app_version: "1.0.0"
+log_level: "INFO"

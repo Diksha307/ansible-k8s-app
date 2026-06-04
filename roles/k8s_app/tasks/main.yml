@@ -3,6 +3,10 @@
   tags:
     - namespace
 
+- import_tasks: configmap.yml
+  tags:
+    - configmap
+
 - import_tasks: deploy.yml
   tags:
     - deploy

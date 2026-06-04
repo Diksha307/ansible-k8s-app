@@ -1,18 +1,16 @@
 ---
-- name: Wait For Pods
+- name: Wait For Pods To Be Running
   kubernetes.core.k8s_info:
     kind: Pod
     namespace: "{{ namespace_name }}"
     label_selectors:
       - app={{ app_name }}
-
   register: pod_info
-
-  retries: 10
+  retries: 12
   delay: 15
-
   until: >
-    pod_info.resources | length > 0
+    pod_info.resources | length > 0 and
+    pod_info.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
 
 - name: Get Deployment Info
   kubernetes.core.k8s_info:
@@ -22,12 +20,13 @@
     namespace: "{{ namespace_name }}"
   register: deployment_info
 
-- name: Validate Deployment
+- name: Validate Deployment Ready Replicas
   assert:
     that:
-      - deployment_info.resources[0].status.readyReplicas | default(0) >= replica_count
-    fail_msg: "Deployment validation failed"
-    success_msg: "Deployment successful"
+      - deployment_info.resources | length > 0
+      - deployment_info.resources[0].status.readyReplicas | default(0) >= (scale_replicas | int if scale_enabled else replica_count | int)
+    fail_msg: "Deployment validation failed: replicas not ready"
+    success_msg: "Deployment validated successfully"
 
 - name: Show Pod Status
   debug:

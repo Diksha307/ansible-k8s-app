@@ -17,3 +17,8 @@ environment: "prod"
 scale_enabled: true
 
 scale_replicas: "{{ 5 if environment == 'prod' else 2 }}"
+
+# ConfigMap values
+redis_host: "localhost"
+app_version: "1.0.0"
+log_level: "INFO"
