@@ -64,7 +64,7 @@ All variables are in [group_vars/all.yml](group_vars/all.yml) and can be overrid
 | `container_port` | `80` | App container port |
 | `service_port` | `80` | Kubernetes service port |
 | `service_type` | `ClusterIP` | K8s service type |
-| `environment` | `prod` | App environment (affects dynamic scaling) |
+| `app_env` | `prod` | App environment (affects dynamic scaling) |
 | `scale_enabled` | `true` | Enable dynamic scaling |
 | `scale_replicas` | `5` (prod) / `2` (other) | Target replicas when scaling |
 | `redis_host` | `localhost` | Redis host injected via ConfigMap |

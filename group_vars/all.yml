@@ -12,11 +12,11 @@ service_port: 80
 
 service_type: ClusterIP
 
-environment: "prod"
+app_env: "prod"
 
 scale_enabled: true
 
-scale_replicas: "{{ 5 if environment == 'prod' else 2 }}"
+scale_replicas: "{{ 5 if app_env == 'prod' else 2 }}"
 
 # ConfigMap values
 redis_host: "localhost"
