@@ -1,7 +1,16 @@
 ---
-- name: Deploy Application
+- name: Deploy Application to Kubernetes
   hosts: localhost
   gather_facts: false
+
+  pre_tasks:
+    - name: Verify Kubernetes Cluster is Reachable
+      kubernetes.core.k8s_info:
+        kind: Namespace
+        name: default
+      register: cluster_check
+      failed_when: cluster_check.resources | length == 0
+      tags: always
 
   roles:
     - k8s_app

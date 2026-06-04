@@ -5,6 +5,10 @@
       kubernetes.core.k8s:
         state: present
         definition: "{{ lookup('template', 'deployment.yml.j2') }}"
+      register: deploy_result
+      retries: 3
+      delay: 10
+      until: deploy_result is not failed
 
     - name: Create Service
       kubernetes.core.k8s:
@@ -13,16 +17,20 @@
 
   rescue:
 
-    - name: Deployment Failed
-      debug:
-        msg: "Application deployment failed"
+    - name: Deployment Failed - Attempting Rollback
+      kubernetes.core.k8s_rollout_restart:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ app_name }}"
+        namespace: "{{ namespace_name }}"
+      ignore_errors: true
 
-    - name: Stop Execution
+    - name: Stop Execution After Failed Deployment
       fail:
-        msg: "Deployment terminated"
+        msg: "Deployment of {{ app_name }} failed after retries. Rollback attempted."
 
   always:
 
     - name: Deployment Attempt Finished
       debug:
-        msg: "Deployment task completed"
+        msg: "Deployment task completed for {{ app_name }}"

@@ -38,6 +38,28 @@ spec:
         - configMapRef:
             name: {{ app_name }}-config
 
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: {{ container_port }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: {{ container_port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+
       - name: redis
 
         image: redis:7

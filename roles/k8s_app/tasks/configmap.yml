@@ -18,7 +18,7 @@
     - configmap
 
 - name: Wait For Rollout To Complete
-  kubernetes.core.k8s_rollout_info:
+  kubernetes.core.k8s_info:
     api_version: apps/v1
     kind: Deployment
     name: "{{ app_name }}"
@@ -27,9 +27,9 @@
   retries: 12
   delay: 15
   until: >
-    rollout_info.status is defined and
-    rollout_info.status.updatedReplicas | default(0) == rollout_info.status.replicas | default(1) and
-    rollout_info.status.availableReplicas | default(0) == rollout_info.status.replicas | default(1)
+    rollout_info.resources | length > 0 and
+    rollout_info.resources[0].status.updatedReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1) and
+    rollout_info.resources[0].status.availableReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1)
   when: configmap_result.changed
   tags:
     - configmap
@@ -37,9 +37,9 @@
 - name: Print Rollout Status
   debug:
     msg: >
-      Rollout status — desired: {{ rollout_info.status.replicas | default('N/A') }},
-      updated: {{ rollout_info.status.updatedReplicas | default('N/A') }},
-      available: {{ rollout_info.status.availableReplicas | default('N/A') }}
+      Rollout status — desired: {{ rollout_info.resources[0].status.replicas | default('N/A') }},
+      updated: {{ rollout_info.resources[0].status.updatedReplicas | default('N/A') }},
+      available: {{ rollout_info.resources[0].status.availableReplicas | default('N/A') }}
   when: configmap_result.changed
   tags:
     - configmap
