@@ -22,8 +22,8 @@
         name: "{{ app_name }}"
         namespace: "{{ namespace_name }}"
       register: rollout_info
-      retries: 12
-      delay: 15
+      retries: 2
+      delay: 2
       until: >
         rollout_info.resources | length > 0 and
         rollout_info.resources[0].status.updatedReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1) and
@@ -38,18 +38,50 @@
           available: {{ rollout_info.resources[0].status.availableReplicas | default('N/A') }}
       when: deploy_result.changed
 
+    - name: Mark deployment success
+      set_fact:
+        deployment_status: "SUCCESS"
+
   rescue:
+
+    - name: Mark deployment failed
+      set_fact:
+        deployment_status: "FAILED"
+
 
     - name: Deployment Failed - Attempting Rollback
       command: kubectl rollout undo deployment/{{ app_name }} -n {{ namespace_name }}
       ignore_errors: true
+
+    - name: Get Pod status
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{namespace_name}}"
+      register: pod_info
+      retries: 3
+      delay: 3
+      until: >
+        pod_info.resources | length > 0 and
+        (
+        pod_info.resources 
+        | selectattr( 'status.phase' , 'equalto', 'pending')
+        | list
+        | length
+        ) == 0
+
+    - name: Show pod status
+      debug:
+        msg: "{{ item.metadata.name }} | {{ item.status.phase }} | {{ item.status.containerStatuses[0].state.waiting.reason | default('Running') }}"
+      loop: "{{ pod_info.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
 
     - name: Stop Execution After Failed Deployment
       fail:
         msg: "Deployment of {{ app_name }} failed after retries. Rollback attempted."
 
   always:
-
-    - name: Deployment Attempt Finished
+    - name: Deployment Summary
       debug:
-        msg: "Deployment task completed for {{ app_name }}"
+        msg: "Deployment status for {{ app_name }}: {{ deployment_status | default('UNKNOWN') }}"

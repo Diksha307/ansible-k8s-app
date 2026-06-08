@@ -32,3 +32,5 @@
   debug:
     msg: "{{ item.metadata.name }} : {{ item.status.phase }}"
   loop: "{{ pod_info.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
