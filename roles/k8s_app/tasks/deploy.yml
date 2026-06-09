@@ -22,8 +22,8 @@
         name: "{{ app_name }}"
         namespace: "{{ namespace_name }}"
       register: rollout_info
-      retries: 2
-      delay: 2
+      retries: 12
+      delay: 12
       until: >
         rollout_info.resources | length > 0 and
         rollout_info.resources[0].status.updatedReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1) and

@@ -34,3 +34,7 @@
   loop: "{{ pod_info.resources }}"
   loop_control:
     label: "{{ item.metadata.name }}"
+
+- name: Display vault secret_password
+  debug:
+    msg: "{{ secret_password }}"
