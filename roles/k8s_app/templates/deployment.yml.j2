@@ -40,6 +40,13 @@ spec:
         - configMapRef:
             name: {{ app_name }}-config
 
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ app_name }}-secret
+              key: REDIS_PASSWORD
+
         resources:
           requests:
             cpu: "100m"

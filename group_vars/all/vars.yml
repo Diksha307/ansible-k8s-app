@@ -1,0 +1,27 @@
+namespace_name: demo-app
+
+app_name: fastapi-demo
+
+image_name: tiangolo/uvicorn-gunicorn-fastapi:python3.11
+
+replica_count: 2
+
+container_port: 80
+
+service_port: 80
+
+service_type: ClusterIP
+
+app_env: "prod"
+
+scale_enabled: true
+
+scale_replicas: "{{ 5 if app_env == 'prod' else 2 }}"
+
+# ConfigMap values
+redis_host: "localhost"
+app_version: "1.0.0"
+log_level: "INFO"
+
+# Reference to vault-encrypted variable
+redis_password: "{{ vault_redis_password }}"

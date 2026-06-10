@@ -3,6 +3,10 @@
   tags:
     - namespace
 
+- import_tasks: secret.yml
+  tags:
+    - secret
+
 - import_tasks: configmap.yml
   tags:
     - configmap

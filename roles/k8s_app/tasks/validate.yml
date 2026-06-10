@@ -35,6 +35,18 @@
   loop_control:
     label: "{{ item.metadata.name }}"
 
-- name: Display vault secret_password
-  debug:
-    msg: "{{ secret_password }}"
+- name: Verify Secret Exists
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ app_name }}-secret"
+    namespace: "{{ namespace_name }}"
+  register: secret_info
+  no_log: true
+
+- name: Assert secret is deployed
+  assert:
+    that:
+      - secret_info.resources | length > 0
+    fail_msg: "Secret {{ app_name }}-secret not found in namespace {{ namespace_name }}"
+    success_msg: "Secret verified successfully"
