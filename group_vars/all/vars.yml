@@ -2,7 +2,7 @@ namespace_name: demo-app
 
 app_name: fastapi-demo
 
-image_name: tiangolo/uvvvicorn-gunicorn-fastapi:python3.11
+image_name: tiangolo/uvicorn-gunicorn-fastapi:python3.11
 
 replica_count: 2
 
