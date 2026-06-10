@@ -10,15 +10,20 @@ Automates deploying a **FastAPI + Redis** multi-container application on Kuberne
 ansible-k8s-app/
 ├── site.yml                          # Main playbook entry point
 ├── inventory                         # Ansible inventory (localhost)
+├── ansible.cfg                       # Ansible config (vault password file path)
 ├── requirements.yml                  # Ansible collections (kubernetes.core)
+├── .vault_pass                       # Vault password file (gitignored, create manually)
 ├── group_vars/
-│   └── all.yml                       # All configurable variables
+│   └── all/
+│       ├── vars.yml                  # Plain variables + references to vault vars
+│       └── vault.yml                 # Vault-encrypted sensitive variables
 └── roles/
     └── k8s_app/
         ├── defaults/main.yml         # Role default values
         ├── tasks/
         │   ├── main.yml              # Task orchestrator with tags
         │   ├── namespace.yml         # Create K8s namespace
+        │   ├── secret.yml            # Deploy K8s Secret from vault variables
         │   ├── configmap.yml         # ConfigMap deploy + hash checksum fact
         │   ├── deploy.yml            # Deployment + Service with error handling
         │   ├── scale.yml             # Dynamic scaling
@@ -26,13 +31,12 @@ ansible-k8s-app/
         ├── templates/
         │   ├── namespace.yml.j2      # Namespace template
         │   ├── configmap.yml.j2      # ConfigMap template
+        │   ├── secret.yml.j2         # Secret template (values from vault)
         │   ├── deployment.yml.j2     # Multi-container Deployment template
         │   └── service.yml.j2        # Service template
         ├── handlers/main.yml
         ├── meta/main.yml
         └── tests/test.yml
-```
-
 ---
 
 ## Prerequisites
@@ -51,9 +55,75 @@ ansible-galaxy collection install -r requirements.yml
 
 ---
 
+## Ansible Vault — Secrets Management
+
+Sensitive values such as passwords and secret keys are encrypted using **Ansible Vault** and never stored in plain text in the repository.
+
+### How it works
+
+Variables are split into two files under `group_vars/all/`:
+
+| File | Purpose |
+|---|---|
+| `vars.yml` | Plain variables and references to vault variables |
+| `vault.yml` | Vault-encrypted sensitive variables only |
+
+`vars.yml` references vault variables by name:
+```yaml
+redis_password: "{{ vault_redis_password }}"
+```
+
+`vault.yml` stores the encrypted value:
+```yaml
+vault_redis_password: !vault |
+  $ANSIBLE_VAULT;1.1;AES256
+  ...encrypted ciphertext...
+```
+
+At runtime Ansible decrypts `vault_redis_password` and injects it into the Kubernetes Secret. The Secret is then mounted into the application container as the `REDIS_PASSWORD` environment variable.
+
+### Setup — create the vault password file
+
+The vault password file is **gitignored** and must be created manually on each machine:
+
+```bash
+echo "your_vault_password" > .vault_pass
+chmod 600 .vault_pass
+```
+
+`ansible.cfg` is already configured to use it automatically:
+```ini
+[defaults]
+vault_password_file = .vault_pass
+```
+
+No `--ask-vault-pass` or `--vault-password-file` flags needed when running the playbook.
+
+### Encrypting a new secret value
+
+```bash
+ansible-vault encrypt_string 'your_secret_value' --name 'vault_variable_name'
+```
+
+Paste the output into `group_vars/all/vault.yml`.
+
+### Viewing an encrypted variable
+
+```bash
+ansible localhost -m debug -a "var=vault_redis_password" -i inventory
+```
+
+### Deploy only the Secret
+
+```bash
+ansible-playbook -i inventory site.yml --tags secret
+```
+
+---
+
 ## Variables
 
-All variables are in [group_vars/all.yml](group_vars/all.yml) and can be overridden at runtime with `--extra-vars`.
+Plain variables are in [group_vars/all/vars.yml](group_vars/all/vars.yml). Sensitive variables are vault-encrypted in [group_vars/all/vault.yml](group_vars/all/vault.yml). All can be overridden at runtime with `--extra-vars`.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -70,6 +140,7 @@ All variables are in [group_vars/all.yml](group_vars/all.yml) and can be overrid
 | `redis_host` | `localhost` | Redis host injected via ConfigMap |
 | `app_version` | `1.0.0` | App version injected via ConfigMap |
 | `log_level` | `INFO` | Log level injected via ConfigMap |
+| `vault_redis_password` | *(vault encrypted)* | Redis password — stored encrypted in `vault.yml`, injected as K8s Secret |
 
 ---
 
@@ -126,7 +197,7 @@ ansible-playbook -i inventory site.yml --extra-vars "environment=staging scale_e
 ## Key Design Decisions
 
 ### Multi-container pod
-The deployment runs **FastAPI** (application) and **Redis** (cache) as a sidecar in the same pod. This satisfies the "more functional than plain NGINX" requirement and demonstrates multi-container pod configuration.
+The deployment runs **FastAPI** (application) and **Redis** (cache) as a sidecar in the same pod. 
 
 ### ConfigMap-driven configuration
 All runtime config (environment, Redis host, log level, app version) is stored in a Kubernetes ConfigMap and injected into the app container via `envFrom`.
@@ -141,6 +212,9 @@ The `kubernetes.core.k8s` module is declarative — re-running the playbook when
 
 ### Error handling
 The deploy block uses Ansible's `block/rescue/always` pattern. If a deployment fails, `kubectl rollout undo` restores the **previous working ReplicaSet** (real rollback to the last known-good version). A `fail` task then halts execution cleanly.
+
+### Secrets management with Ansible Vault
+Sensitive values are encrypted with AES256 using Ansible Vault and stored in `group_vars/all/vault.yml`. At runtime Ansible decrypts them and creates a Kubernetes `Secret` object. The Secret is injected into the application container via `secretKeyRef` — never through a ConfigMap or plain environment variable. Tasks that handle secret values use `no_log: true` to prevent values appearing in playbook output or CI logs.
 
 ### Tags for selective execution
 Every task group has a tag (`namespace`, `configmap`, `deploy`, `scale`, `validate`) enabling targeted runs during CI or debugging.
@@ -163,6 +237,7 @@ Every task group has a tag (`namespace`, `configmap`, `deploy`, `scale`, `valida
 ```bash
 kubectl get pods -n demo-app
 kubectl get configmap fastapi-demo-config -n demo-app -o yaml
+kubectl get secret fastapi-demo-secret -n demo-app
 kubectl rollout status deployment/fastapi-demo -n demo-app
 kubectl describe deployment fastapi-demo -n demo-app
 ```
