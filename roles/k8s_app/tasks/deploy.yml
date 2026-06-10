@@ -26,17 +26,47 @@
       delay: 12
       until: >
         rollout_info.resources | length > 0 and
-        rollout_info.resources[0].status.updatedReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1) and
-        rollout_info.resources[0].status.availableReplicas | default(0) == rollout_info.resources[0].status.replicas | default(1)
+        rollout_info.resources[0].status.updatedReplicas | default(0) ==
+        rollout_info.resources[0].status.replicas | default(1) and
+        rollout_info.resources[0].status.availableReplicas | default(0) ==
+        rollout_info.resources[0].status.replicas | default(1)
       when: deploy_result.changed
+      failed_when: false
 
     - name: Print Rollout Status
       debug:
         msg: >
-          Rollout status — desired: {{ rollout_info.resources[0].status.replicas | default('N/A') }},
-          updated: {{ rollout_info.resources[0].status.updatedReplicas | default('N/A') }},
-          available: {{ rollout_info.resources[0].status.availableReplicas | default('N/A') }}
+          Rollout status — desired:
+          {{ rollout_info.resources[0].status.replicas | default('N/A') }},
+          updated:
+          {{ rollout_info.resources[0].status.updatedReplicas | default('N/A') }},
+          available:
+          {{ rollout_info.resources[0].status.availableReplicas | default('N/A') }},
+          ready:
+          {{ rollout_info.resources[0].status.readyReplicas | default('N/A') }}
       when: deploy_result.changed
+
+    - name: Fail if rollout not complete
+      fail:
+        msg: |
+          Deployment rollout failed.
+
+          Deployment: {{ app_name }}
+          Namespace : {{ namespace_name }}
+
+          Desired Replicas : {{ replica_count }}
+          Updated Replicas : {{ rollout_info.resources[0].status.updatedReplicas | default(0) }}
+          Ready Replicas   : {{ rollout_info.resources[0].status.readyReplicas | default(0) }}
+          Available        : {{ rollout_info.resources[0].status.availableReplicas | default(0) }}
+
+         
+          Rollout did not reach the desired state within the configured timeout.
+          Collecting pod diagnostics and attempting rollback...
+
+      when: >
+        rollout_info.resources[0].status.updatedReplicas | default(0) != replica_count
+        or
+        rollout_info.resources[0].status.readyReplicas | default(0) != replica_count
 
     - name: Mark deployment success
       set_fact:
@@ -48,40 +78,42 @@
       set_fact:
         deployment_status: "FAILED"
 
-
-    - name: Deployment Failed - Attempting Rollback
-      command: kubectl rollout undo deployment/{{ app_name }} -n {{ namespace_name }}
-      ignore_errors: true
-
     - name: Get Pod status
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Pod
-        namespace: "{{namespace_name}}"
+        namespace: "{{ namespace_name }}"
       register: pod_info
-      retries: 3
-      delay: 3
-      until: >
-        pod_info.resources | length > 0 and
-        (
-        pod_info.resources 
-        | selectattr( 'status.phase' , 'equalto', 'pending')
-        | list
-        | length
-        ) == 0
 
     - name: Show pod status
       debug:
-        msg: "{{ item.metadata.name }} | {{ item.status.phase }} | {{ item.status.containerStatuses[0].state.waiting.reason | default('Running') }}"
+        msg: >
+          {{ item.metadata.name }} |
+          {{ item.status.phase }} |
+          {{
+            item.status.containerStatuses[0].state.waiting.reason
+            | default('N/A')
+          }}
+          {{
+            item.status.containerStatuses[0].state.waiting.message
+            | default('No message')
+          }}
       loop: "{{ pod_info.resources }}"
       loop_control:
         label: "{{ item.metadata.name }}"
+
+    - name: Deployment Failed - Attempting Rollback
+      command: >
+        kubectl rollout undo deployment/{{ app_name }}
+        -n {{ namespace_name }}
+      ignore_errors: true
 
     - name: Stop Execution After Failed Deployment
       fail:
         msg: "Deployment of {{ app_name }} failed after retries. Rollback attempted."
 
   always:
+
     - name: Deployment Summary
       debug:
         msg: "Deployment status for {{ app_name }}: {{ deployment_status | default('UNKNOWN') }}"
